@@ -2,8 +2,8 @@ import strawberry
 from fastapi import FastAPI
 from strawberry.asgi import GraphQL
 
-from mutation import GriseraMutation
-from query import GriseraQuery
+from mutation.mutation import GriseraMutation
+from query.query import GriseraQuery
 
 schema = strawberry.Schema(query=GriseraQuery, mutation=GriseraMutation)
 

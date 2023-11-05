@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import List, Optional
 
 import strawberry
 
@@ -19,7 +19,7 @@ class Activity:
     """
     id: strawberry.ID
     name: str
-    additionalParameters: AdditionalParameters
+    additionalParameters: Optional[List[AdditionalParameters]]
 
 
 @strawberry.type
@@ -31,7 +31,7 @@ class ActivityExecution:
     id: strawberry.ID
     name: str
     hasActivity: Activity
-    additionalParameters: AdditionalParameters
+    additionalParameters: Optional[List[AdditionalParameters]]
 
 
 @strawberry.type
@@ -43,7 +43,7 @@ class Experiment:
     id: strawberry.ID
     name: str
     scenario: ActivityExecution
-    additionalParameters: AdditionalParameters
+    additionalParameters: Optional[List[AdditionalParameters]]
 
 
 @strawberry.type
@@ -53,7 +53,7 @@ class Participant:
     """
     id: strawberry.ID
     name: str
-    additionalParameters: AdditionalParameters
+    additionalParameters: Optional[List[AdditionalParameters]]
 
 
 @strawberry.type
@@ -64,7 +64,7 @@ class ParticipantState:
     id: strawberry.ID
     name: str
     hasParticipant: Participant
-    additionalParameters: AdditionalParameters
+    additionalParameters: Optional[List[AdditionalParameters]]
 
 
 @strawberry.type
@@ -76,4 +76,4 @@ class Participation:
     name: str
     hasActivityExecution: ActivityExecution
     hasParticipantState: ParticipantState
-    additionalParameters: AdditionalParameters
+    additionalParameters: Optional[List[AdditionalParameters]]

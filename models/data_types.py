@@ -21,7 +21,6 @@ class Activity:
     name: str
     additionalParameters: Optional[List[AdditionalParameters]]
 
-
 @strawberry.type
 class ActivityExecution:
     """

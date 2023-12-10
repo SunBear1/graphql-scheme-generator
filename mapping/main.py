@@ -1,10 +1,26 @@
 from typing import Dict, List
-
+import requests
 from owlready2 import *
 
-onto = get_ontology("https://road.affectivese.org/documentation/owlAC.owl").load()
-
 BASIC_TYPES = ["str", "int", "float", "bool"]
+TYPES_OUTPUT_FILE_PATH = "generated_data_types.py"
+
+
+def get_owl_files_from_github(branch: str, owl_root_file_name: str = "owlAC.owl") -> List[str]:
+    owl_files = []
+    url = f"https://api.github.com/repos/GRISERA/road/git/trees/{branch}?recursive=1"
+    response = requests.get(url)
+    response_json = response.json()
+    if "tree" not in response_json:
+        raise Exception(f"Error fetching OWL files from GitHub: {response_json}")
+
+    for gh_file in response_json["tree"]:
+        if gh_file["path"].endswith(".owl"):
+            owl_files.append(f"https://raw.githubusercontent.com/GRISERA/road/{branch}/{gh_file['path']}")
+
+    owl_files.insert(0, owl_files.pop(
+        owl_files.index(f"https://raw.githubusercontent.com/GRISERA/road/{branch}/{owl_root_file_name}")))
+    return owl_files
 
 
 def map_class_from_owl(road_class) -> Dict:
@@ -22,7 +38,7 @@ def get_fields(road_class) -> Dict:
             fields_properties[f"{child.name}"] = child.name
         if child.__class__.__name__ == "Restriction":
             if child.property.__class__.__name__ == "Inverse":
-                print("skipping inversion...")
+                pass  # what to do with inverse? Hopefully nothing
             elif "owlAC" in str(child.value):
                 fields_properties[f"{child.property.__name__}"] = child.value.name
             elif "owlAC" not in str(child.value):
@@ -57,8 +73,19 @@ def check_if_subclass_exists(ordered_types: List[Dict], value: str) -> bool:
     return False
 
 
+def check_if_class_already_exists(road_class: str) -> bool:
+    with open(TYPES_OUTPUT_FILE_PATH, 'r') as file:
+        for line in file.readlines():
+            if f"class {road_class}:" in line:
+                return True
+    return False
+
+
 def order_graphql_types(graphql_types: List[Dict]) -> List[Dict]:
     graphql_types = sorted(graphql_types, key=lambda x: len(x['fields']))
+    if len(graphql_types) == 1:
+        return graphql_types
+
     ordered_types = []
     for _type in graphql_types:
         if len(_type['fields']) == 0:
@@ -71,6 +98,8 @@ def order_graphql_types(graphql_types: List[Dict]) -> List[Dict]:
                 for value in new_type['fields'].values():
                     if check_if_subclass_exists(ordered_types=ordered_types, value=value):
                         good_to_go = True
+                    elif check_if_class_already_exists(road_class=value):
+                        good_to_go = True
                     else:
                         good_to_go = False
                         break
@@ -79,16 +108,28 @@ def order_graphql_types(graphql_types: List[Dict]) -> List[Dict]:
     return ordered_types
 
 
-if "__main__" == __name__:
-    types_output_filename = "generated_data_types.py"
+def process_owl_file(owl_file_path: str) -> List[Dict]:
+    onto = get_ontology(owl_file_path).load()
     road_classes = list(onto.classes())
     graphql_types = []
     for road_class in road_classes:
+        if check_if_class_already_exists(road_class.name):
+            continue
         translated_owl_class = map_class_from_owl(road_class)
         graphql_types.append(translated_owl_class)
 
     graphql_types = order_graphql_types(graphql_types)
+    return graphql_types
 
+
+def save_types_into_file(graphql_types: List[Dict]):
+    with open(TYPES_OUTPUT_FILE_PATH, 'a') as graphql_types_file:
+        for graphql_type in graphql_types:
+            graphql_types_file.write(create_class_from_specification(class_specification=graphql_type) + '\n')
+
+
+if "__main__" == __name__:
+    print("Welcome")
     additional_parameters_spec = f"""
 @strawberry.type
 class AdditionalParameters:
@@ -97,12 +138,19 @@ class AdditionalParameters:
     \"""
     key: str
     value: str
-"""
-
-    if os.path.exists(types_output_filename):
-        os.remove(types_output_filename)
-    with open(types_output_filename, 'a') as file:
+    """
+    if os.path.exists(TYPES_OUTPUT_FILE_PATH):
+        os.remove(TYPES_OUTPUT_FILE_PATH)
+    with open(TYPES_OUTPUT_FILE_PATH, 'a') as file:
         file.write("from typing import List, Optional\n\nimport strawberry\n\n")
         file.write(additional_parameters_spec + '\n')
-        for _type in graphql_types:
-            file.write(create_class_from_specification(class_specification=_type) + '\n')
+    print("Initializing complete")
+
+    owl_files = get_owl_files_from_github(branch="main")
+    print(f"OWL files fetched: {owl_files}")
+    for owl_file in owl_files:
+        print(f"Processing OWL file: {owl_file}")
+        graphql_types_from_owl = process_owl_file(owl_file_path=owl_file)
+        save_types_into_file(graphql_types=graphql_types_from_owl)
+        print(f"OWL file {owl_file} translated and saved")
+    print("Done")

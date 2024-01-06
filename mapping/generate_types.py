@@ -1,9 +1,10 @@
 from typing import Dict, List
 import requests
 from owlready2 import *
+from common import camel_to_snake_case
 
 BASIC_TYPES = ["str", "int", "float", "bool"]
-GENERATED_TYPES_FILE_PATH = "generated_data_types.py"
+GENERATED_TYPES_FILE_PATH = "generated_graphql_types.py"
 
 
 def get_owl_files_from_github(branch: str, owl_root_file_name: str = "owlAC.owl") -> List[str]:
@@ -49,10 +50,18 @@ def get_fields(road_class) -> Dict:
 
 def create_class_from_specification(class_specification: Dict) -> str:
     if class_specification["fields"] is not None:
+        if "name" in class_specification["fields"]:
+            class_specification["fields"].pop("name")
         unique_properties_str = "".join(
-            [f"\n    {prop}: {prop_type}" for prop, prop_type in class_specification['fields'].items()])
+            [f"\n    {camel_to_snake_case(prop)}: {prop_type}" for prop, prop_type in
+             class_specification['fields'].items()])
+
+        unique_input_properties_str = "".join(
+            [f"\n    {camel_to_snake_case(prop)}: {prop_type}Input = None" for prop, prop_type in
+             class_specification['fields'].items()])
     else:
         unique_properties_str = ""
+        unique_input_properties_str = ""
     class_definition = f"""
 @strawberry.type
 class {class_specification["name"]}:
@@ -62,13 +71,18 @@ class {class_specification["name"]}:
     id: strawberry.ID
     name: str
     additionalParameters: Optional[List[AdditionalParameters]]{unique_properties_str}
+    
+@strawberry.input
+class {class_specification["name"]}Input:
+    id: strawberry.ID = None
+    name: str = None{unique_input_properties_str}
 """
     return class_definition
 
 
 def check_if_subclass_exists(ordered_types: List[Dict], value: str) -> bool:
     for ordered_type in ordered_types:
-        if value in ordered_type["name"] or value in BASIC_TYPES:
+        if value == ordered_type["name"] or value in BASIC_TYPES:
             return True
     return False
 
@@ -130,14 +144,13 @@ def save_types_into_file(graphql_types: List[Dict]):
 
 def generate_graphql_types_from_owl() -> str:
     additional_parameters_spec = f"""
-    @strawberry.type
-    class AdditionalParameters:
-        \"""
-        A set of additional parameters that can be assigned to any ROAD class.
-        \"""
-        key: str
-        value: str
-        """
+@strawberry.type
+class AdditionalParameters:
+    \"""
+    A set of additional parameters that can be assigned to any ROAD class.
+    \"""
+    key: str
+    value: str\n"""
     if os.path.exists(GENERATED_TYPES_FILE_PATH):
         os.remove(GENERATED_TYPES_FILE_PATH)
     with open(GENERATED_TYPES_FILE_PATH, 'a') as file:
@@ -152,4 +165,5 @@ def generate_graphql_types_from_owl() -> str:
         graphql_types_from_owl = process_owl_file(owl_file_path=owl_file)
         save_types_into_file(graphql_types=graphql_types_from_owl)
         print(f"OWL file {owl_file} translated and saved")
+    print(f"GraphQL types generated and saved in {GENERATED_TYPES_FILE_PATH}")
     return GENERATED_TYPES_FILE_PATH

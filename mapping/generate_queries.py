@@ -1,8 +1,7 @@
 import ast
 import os
-import sys
 from typing import TextIO
-from common import camel_to_snake_case
+from common import camel_to_snake_case, BASIC_TYPES
 
 GENERATED_QUERIES_FILE_PATH = "generated_graphql_queries.py"
 ACRONYMS = ["PAD"]
@@ -45,7 +44,10 @@ def generate_graph_queries(generated_types_file_path: str) -> str:
                             argument_name = "_id"
                             property_type = "str"
                         else:
-                            property_type = class_property.annotation.id
+                            if class_property.annotation.id not in BASIC_TYPES:
+                                property_type = f"{class_property.annotation.id}Input"
+                            else:
+                                property_type = class_property.annotation.id
                             argument_name = camel_to_snake_case(property_name)
                         file.write(f"{indent_builder(size=1)}@strawberry.field\n")
                         file.write(

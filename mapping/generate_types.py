@@ -1,9 +1,8 @@
 from typing import Dict, List
 import requests
 from owlready2 import *
-from common import camel_to_snake_case
+from common import camel_to_snake_case, BASIC_TYPES
 
-BASIC_TYPES = ["str", "int", "float", "bool"]
 GENERATED_TYPES_FILE_PATH = "generated_graphql_types.py"
 
 

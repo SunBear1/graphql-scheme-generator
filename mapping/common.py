@@ -1,3 +1,6 @@
+BASIC_TYPES = ["str", "int", "float", "bool"]
+
+
 def camel_to_snake_case(name: str):
     snake_case = name[0]
     for idx in range(1, len(name) - 1):

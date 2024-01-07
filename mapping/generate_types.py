@@ -52,16 +52,25 @@ def create_class_from_specification(class_specification: Dict) -> str:
     if class_specification["fields"] is not None:
         if "name" in class_specification["fields"]:
             class_specification["fields"].pop("name")
-        unique_properties_str = "".join(
-            [f"\n    {camel_to_snake_case(prop)}: {prop_type}" for prop, prop_type in
-             class_specification['fields'].items()])
 
-        unique_input_properties_str = "".join(
-            [f"\n    {camel_to_snake_case(prop)}: {prop_type}Input = None" for prop, prop_type in
-             class_specification['fields'].items()])
+        unique_properties_str = ""
+        for prop_name, prop_type in class_specification['fields'].items():
+            converted_prop = camel_to_snake_case(prop_name)
+            formatted_str = f"\n    {converted_prop}: {prop_type}"
+            unique_properties_str += formatted_str
+
+        unique_input_properties_str = ""
+        for prop_name, prop_type in class_specification['fields'].items():
+            converted_prop = camel_to_snake_case(prop_name)
+            if prop_type in BASIC_TYPES:
+                formatted_str = f"\n    {converted_prop}: {prop_type} = None"
+            else:
+                formatted_str = f"\n    {converted_prop}: {prop_type}Input = None"
+            unique_input_properties_str += formatted_str
     else:
         unique_properties_str = ""
         unique_input_properties_str = ""
+
     class_definition = f"""
 @strawberry.type
 class {class_specification["name"]}:
@@ -71,6 +80,7 @@ class {class_specification["name"]}:
     id: strawberry.ID
     name: str
     additionalParameters: Optional[List[AdditionalParameters]]{unique_properties_str}
+    
     
 @strawberry.input
 class {class_specification["name"]}Input:

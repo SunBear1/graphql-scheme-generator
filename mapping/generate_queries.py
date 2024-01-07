@@ -36,7 +36,7 @@ def generate_graph_queries(generated_types_file_path: str) -> str:
 
     tree = ast.parse(code)
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name != "AdditionalParameters":
+        if isinstance(node, ast.ClassDef) and node.name != "AdditionalParameters" and "Input" not in node.name:
             with open(GENERATED_QUERIES_FILE_PATH, 'a') as file:
                 for class_property in node.body:
                     if isinstance(class_property, ast.AnnAssign) and class_property.target.id != "additionalParameters":

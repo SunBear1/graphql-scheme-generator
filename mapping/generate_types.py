@@ -159,7 +159,12 @@ class AdditionalParameters:
     A set of additional parameters that can be assigned to any ROAD class.
     \"""
     key: str
-    value: str\n"""
+    value: str\n
+
+@strawberry.input
+class AdditionalParameterInput:
+    key: str
+    value: str"""
     if os.path.exists(GENERATED_TYPES_FILE_PATH):
         os.remove(GENERATED_TYPES_FILE_PATH)
     with open(GENERATED_TYPES_FILE_PATH, 'a') as file:

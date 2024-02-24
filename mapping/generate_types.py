@@ -1,6 +1,8 @@
 from typing import Dict, List
+
 import requests
 from owlready2 import *
+
 from common import camel_to_snake_case, BASIC_TYPES
 
 GENERATED_TYPES_FILE_PATH = "generated_graphql_types.py"
@@ -164,7 +166,15 @@ class AdditionalParameters:
 @strawberry.input
 class AdditionalParameterInput:
     key: str
-    value: str"""
+    value: str\n
+
+@strawberry.type
+class Dataset:
+    name: str\n
+
+@strawberry.input
+class DatasetInput:
+    name: str = None\n"""
     if os.path.exists(GENERATED_TYPES_FILE_PATH):
         os.remove(GENERATED_TYPES_FILE_PATH)
     with open(GENERATED_TYPES_FILE_PATH, 'a') as file:

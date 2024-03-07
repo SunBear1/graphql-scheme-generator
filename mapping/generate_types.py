@@ -6,6 +6,10 @@ from owlready2 import *
 from common import camel_to_snake_case, BASIC_TYPES
 
 GENERATED_TYPES_FILE_PATH = "generated_graphql_types.py"
+OWL_ONTOLOGY_FILES = ["Main.owl", "Properties.owl", "Stimulus.owl", "Models.Measures.Emotion.PAD.owl",
+                      "Models.Measures.Emotion.Ekman.owl", "Models.Measures.Emotion.Neutral.owl",
+                      "Models.Measures.SignalDependent.EDA.owl", "Models.Appearance.Somatotype.owl",
+                      "Models.Appearance.Occlusion.owl", "Models.Personality.BigFive.owl"]
 
 
 def get_owl_files_from_github(branch: str, owl_root_file_name: str = "owlAC.owl") -> List[str]:
@@ -25,10 +29,17 @@ def get_owl_files_from_github(branch: str, owl_root_file_name: str = "owlAC.owl"
     return owl_files
 
 
+def get_owl_files_from_road_website() -> List[str]:
+    owl_files = []
+    for file in OWL_ONTOLOGY_FILES:
+        owl_files.append(f"https://road.affectivese.org/documentation/{file}")
+    return owl_files
+
+
 def map_class_from_owl(road_class) -> Dict:
     class_properties = {}
     class_properties["name"] = road_class.name
-    class_properties["description"] = str(road_class.comment[0])
+    class_properties["description"] = str(road_class.comment.first())
     class_properties["fields"] = get_fields(road_class)
     return class_properties
 
@@ -44,8 +55,12 @@ def get_fields(road_class) -> Dict:
             elif "owlAC" in str(child.value):
                 fields_properties[f"{child.property.__name__}"] = child.value.name
             elif "owlAC" not in str(child.value):
-                field_type = re.search(r"<class '([^']+)'", str(child.value))
-                fields_properties[f"{child.property.__name__}"] = field_type.group(1)
+                if hasattr(child.value, "name") and child.property.__name__ != "isPartOf":
+                    fields_properties[f"{child.property.__name__}"] = child.value.name
+                else:
+                    field_type = re.search(r"<class '([^']+)'", str(child.value))
+                    if field_type:
+                        fields_properties[f"{child.property.__name__}"] = field_type.group(1)
     return fields_properties
 
 
@@ -64,9 +79,9 @@ def create_class_from_specification(class_specification: Dict) -> str:
         for prop_name, prop_type in class_specification['fields'].items():
             converted_prop = camel_to_snake_case(prop_name)
             if prop_type in BASIC_TYPES:
-                formatted_str = f"\n    {converted_prop}: {prop_type} = None"
+                formatted_str = f"\n    {converted_prop}: Optional[{prop_type}] = None"
             else:
-                formatted_str = f"\n    {converted_prop}: {prop_type}Input = None"
+                formatted_str = f"\n    {converted_prop}: Optional[{prop_type}Input] = None"
             unique_input_properties_str += formatted_str
     else:
         unique_properties_str = ""
@@ -85,8 +100,8 @@ class {class_specification["name"]}:
     
 @strawberry.input
 class {class_specification["name"]}Input:
-    id: strawberry.ID = None
-    name: str = None{unique_input_properties_str}
+    id: Optional[strawberry.ID] = None
+    name: Optional[str] = None{unique_input_properties_str}
 """
     return class_definition
 
@@ -153,7 +168,7 @@ def save_types_into_file(graphql_types: List[Dict]):
             graphql_types_file.write(create_class_from_specification(class_specification=graphql_type) + '\n')
 
 
-def generate_graphql_types_from_owl() -> str:
+def generate_graphql_types_from_owl(source: str) -> str:
     additional_parameters_spec = f"""
 @strawberry.type
 class AdditionalParameters:
@@ -165,8 +180,8 @@ class AdditionalParameters:
 
 @strawberry.input
 class AdditionalParameterInput:
-    key: str
-    value: str\n
+    key: str = None
+    value: str = None\n
 
 @strawberry.type
 class Dataset:
@@ -182,7 +197,13 @@ class DatasetInput:
         file.write(additional_parameters_spec + '\n')
     print("Initializing complete")
 
-    owl_files = get_owl_files_from_github(branch="main")
+    if source == "github":
+        owl_files = get_owl_files_from_github(branch="main")
+    elif source == "road.affectivese.org":
+        owl_files = get_owl_files_from_road_website()
+    else:
+        raise Exception("Invalid source. Please choose 'github' or 'road.affectivese.org'")
+
     print(f"OWL files fetched: {owl_files}")
     for owl_file in owl_files:
         print(f"Processing OWL file: {owl_file}")

@@ -86,9 +86,14 @@ def generate_graph_mutations(generated_types_file_path: str):
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and "AdditionalParameters" not in node.name and "Input" not in node.name:
             with open(GENERATED_MUTATIONS_FILE_PATH, 'a') as file:
-                delete_parameters = "self, "
-                create_params = "self, "
-                update_parameters = "self, "
+                if node.name == "Dataset":
+                    delete_parameters = "self, "
+                    create_params = "self, "
+                    update_parameters = "self, "
+                else:
+                    create_params = "self, dataset_context: DatasetInput, "
+                    update_parameters = "self, dataset_context: DatasetInput, "
+                    delete_parameters = "self, dataset_context: DatasetInput, "
                 for class_property in node.body:
                     if isinstance(class_property, ast.AnnAssign):
                         if class_property.target.id != "additionalParameters":

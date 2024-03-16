@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import requests
 from owlready2 import *
@@ -29,6 +29,19 @@ def get_owl_files_from_github(branch: str, owl_root_file_name: str = "owlAC.owl"
     return owl_files
 
 
+def get_owl_files_from_local_directory(owl_root_file_name: str = "owlAC.owl") -> List[str]:
+    owl_files = []
+    local_path = "C:\\Users\\LocalAdmin\\road"
+    for file in os.listdir("C:\\Users\\LocalAdmin\\road"):
+        f = os.path.join(local_path, file)
+        if os.path.isfile(f) and file.endswith(".owl"):
+            owl_files.append(f)
+
+    owl_files.insert(0, owl_files.pop(
+        owl_files.index(f"C:\\Users\\LocalAdmin\\road\\{owl_root_file_name}")))
+    return owl_files
+
+
 def get_owl_files_from_road_website() -> List[str]:
     owl_files = []
     for file in OWL_ONTOLOGY_FILES:
@@ -40,15 +53,23 @@ def map_class_from_owl(road_class) -> Dict:
     class_properties = {}
     class_properties["name"] = road_class.name
     class_properties["description"] = str(road_class.comment.first())
-    class_properties["fields"] = get_fields(road_class)
+    class_properties["fields"] = get_fields_from_owl(road_class)
+    class_properties["interfaces"] = get_interfaces_from_owl(road_class)
+    class_properties["labels"] = [str(label) for label in road_class.label]
     return class_properties
 
 
-def get_fields(road_class) -> Dict:
-    fields_properties = {}
+def get_interfaces_from_owl(road_class) -> List:
+    interfaces = ["Thing"]
     for child in road_class.is_a:
         if child.__class__.__name__ == "ThingClass" and child.name != "Thing":
-            fields_properties[f"{child.name}"] = child.name
+            interfaces.append(child.name)
+    return interfaces
+
+
+def get_fields_from_owl(road_class) -> Dict:
+    fields_properties = {}
+    for child in road_class.is_a:
         if child.__class__.__name__ == "Restriction":
             if child.property.__class__.__name__ == "Inverse":
                 pass  # what to do with inverse? Hopefully nothing
@@ -59,16 +80,13 @@ def get_fields(road_class) -> Dict:
                     fields_properties[f"{child.property.__name__}"] = child.value.name
                 else:
                     field_type = re.search(r"<class '([^']+)'", str(child.value))
-                    if field_type:
+                    if field_type and child.property.__name__ != "name":
                         fields_properties[f"{child.property.__name__}"] = field_type.group(1)
     return fields_properties
 
 
-def create_class_from_specification(class_specification: Dict) -> str:
-    if class_specification["fields"] is not None:
-        if "name" in class_specification["fields"]:
-            class_specification["fields"].pop("name")
-
+def get_class_properties_from_specification(class_specification: Dict) -> Tuple[str, str]:
+    if "fields" in class_specification:
         unique_properties_str = ""
         for prop_name, prop_type in class_specification['fields'].items():
             converted_prop = camel_to_snake_case(prop_name)
@@ -83,13 +101,33 @@ def create_class_from_specification(class_specification: Dict) -> str:
             else:
                 formatted_str = f"\n    {converted_prop}: Optional[{prop_type}Input] = None"
             unique_input_properties_str += formatted_str
+        return unique_properties_str, unique_input_properties_str
+    return "", ""
+
+
+def get_class_signature_details_from_specification(class_specification: Dict) -> str:
+    if "AbstractClass" in class_specification["labels"]:
+        strawberry_header = "@strawberry.interface"
+        class_interfaces = ""
     else:
-        unique_properties_str = ""
-        unique_input_properties_str = ""
+        strawberry_header = "@strawberry.type"
+        class_interfaces = "("
+        for interface in class_specification["interfaces"]:
+            class_interfaces += f"{interface}, "
+        class_interfaces = class_interfaces[:-2] + ")"
+
+    if "HighQuantity" in class_specification["labels"]:
+        print(f"TODO Implement pagination for class: {class_specification['name']}")
+    return strawberry_header, class_interfaces
+
+
+def create_class_from_specification(class_specification: Dict) -> str:
+    unique_properties_str, unique_input_properties_str = get_class_properties_from_specification(class_specification)
+    strawberry_header, class_interfaces = get_class_signature_details_from_specification(class_specification)
 
     class_definition = f"""
-@strawberry.type
-class {class_specification["name"]}:
+{strawberry_header}
+class {class_specification["name"]}{class_interfaces}:
     \"""
     {class_specification["description"]}
     \"""
@@ -116,7 +154,7 @@ def check_if_subclass_exists(ordered_types: List[Dict], value: str) -> bool:
 def check_if_class_already_exists(road_class: str) -> bool:
     with open(GENERATED_TYPES_FILE_PATH, 'r') as file:
         for line in file.readlines():
-            if f"class {road_class}:" in line:
+            if f"class {road_class}" in line:
                 return True
     return False
 
@@ -127,15 +165,15 @@ def order_graphql_types(graphql_types: List[Dict]) -> List[Dict]:
         return graphql_types
 
     ordered_types = []
-    for _type in graphql_types:
-        if len(_type['fields']) == 0:
-            ordered_types.append(_type)
 
     while len(ordered_types) != len(graphql_types):
         for new_type in graphql_types:
+            dependencies = new_type["interfaces"].copy()
             if len(new_type['fields']) > 0:
+                dependencies += list(new_type['fields'].values())
+            if len(dependencies) > 0:
                 good_to_go = False
-                for value in new_type['fields'].values():
+                for value in dependencies:
                     if check_if_subclass_exists(ordered_types=ordered_types, value=value):
                         good_to_go = True
                     elif check_if_class_already_exists(road_class=value):
@@ -143,8 +181,10 @@ def order_graphql_types(graphql_types: List[Dict]) -> List[Dict]:
                     else:
                         good_to_go = False
                         break
-                if good_to_go and new_type not in ordered_types:
-                    ordered_types.append(new_type)
+            else:
+                good_to_go = True
+            if good_to_go and new_type not in ordered_types:
+                ordered_types.append(new_type)
     return ordered_types
 
 
@@ -177,14 +217,21 @@ class AdditionalParameters:
     \"""
     key: str
     value: str\n
-
+    
 @strawberry.input
 class AdditionalParameterInput:
     key: str = None
     value: str = None\n
 
+@strawberry.interface
+class Thing:
+    id: strawberry.ID
+    name: str
+    additionalParameters: Optional[List[AdditionalParameters]]
+
 @strawberry.type
-class Dataset:
+class Dataset(Thing):
+    id: strawberry.ID
     name: str\n
 
 @strawberry.input
@@ -199,6 +246,8 @@ class DatasetInput:
 
     if source == "github":
         owl_files = get_owl_files_from_github(branch="main")
+    elif source == "local":
+        owl_files = get_owl_files_from_local_directory()
     elif source == "road.affectivese.org":
         owl_files = get_owl_files_from_road_website()
     else:

@@ -60,10 +60,12 @@ def map_class_from_owl(road_class) -> Dict:
 
 
 def get_interfaces_from_owl(road_class) -> List:
-    interfaces = ["Thing"]
+    interfaces = []
     for child in road_class.is_a:
         if child.__class__.__name__ == "ThingClass" and child.name != "Thing":
             interfaces.append(child.name)
+    if not interfaces:
+        interfaces.append("Thing")
     return interfaces
 
 
@@ -105,19 +107,18 @@ def get_class_properties_from_specification(class_specification: Dict) -> Tuple[
     return "", ""
 
 
-def get_class_signature_details_from_specification(class_specification: Dict) -> str:
+def get_class_signature_details_from_specification(class_specification: Dict) -> Tuple[str, str]:
     if "AbstractClass" in class_specification["labels"]:
         strawberry_header = "@strawberry.interface"
-        class_interfaces = ""
     else:
         strawberry_header = "@strawberry.type"
-        class_interfaces = "("
-        for interface in class_specification["interfaces"]:
-            class_interfaces += f"{interface}, "
-        class_interfaces = class_interfaces[:-2] + ")"
+    class_interfaces = "("
+    for interface in class_specification["interfaces"]:
+        class_interfaces += f"{interface}, "
+    class_interfaces = class_interfaces[:-2] + ")"
 
     if "HighQuantity" in class_specification["labels"]:
-        print(f"TODO Implement pagination for class: {class_specification['name']}")
+        class_specification["description"] += "\n    PAGINATION_REQUIRED"
     return strawberry_header, class_interfaces
 
 
@@ -245,7 +246,7 @@ class DatasetInput:
     print("Initializing complete")
 
     if source == "github":
-        owl_files = get_owl_files_from_github(branch="main")
+        owl_files = get_owl_files_from_github(branch="lniedzwiadek/add-additional-annotations")
     elif source == "local":
         owl_files = get_owl_files_from_local_directory()
     elif source == "road.affectivese.org":

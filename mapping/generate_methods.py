@@ -64,6 +64,9 @@ def generate_graph_queries(generated_types_file_path: str):
             with open(GENERATED_QUERIES_FILE_PATH, 'a') as file:
                 query_params = "self, dataset_context: DatasetInput, "
                 for class_property in node.body:
+                    if isinstance(class_property, ast.Expr):
+                        if "PAGINATION_REQUIRED" in node.body[0].value.value:
+                            query_params += f"first: Optional[int] = None, offset: Optional[int] = None, "
                     if isinstance(class_property, ast.AnnAssign):
                         if class_property.target.id != "additionalParameters":
                             argument_name, property_type = get_property_content(class_property)
